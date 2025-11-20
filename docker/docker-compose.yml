@@ -1,0 +1,80 @@
+services:
+  # GPT-OSS 訓練服務
+  gpt-oss-training:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: gpt-oss:latest
+    container_name: gpt-oss-training
+    
+    # GPU 支援 (需要安裝 nvidia-container-toolkit)
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    
+    # 環境變數
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+      - HF_HOME=/workspace/cache
+      - TRANSFORMERS_CACHE=/workspace/cache
+      - HF_DATASETS_CACHE=/workspace/cache
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      - WANDB_PROJECT=${WANDB_PROJECT:-gpt-oss}
+      - PYTHONUNBUFFERED=1
+      - TORCH_DISTRIBUTED_DEBUG=DETAIL
+    
+    # 掛載目錄
+    volumes:
+      # 掛載專案程式碼 (可即時修改)
+      - ..:/workspace
+      # 掛載模型快取 (避免重複下載)
+      - gpt-oss-cache:/workspace/cache
+      # 掛載訓練數據集
+      - ../data:/workspace/data
+      # 掛載檢查點目錄 (持久化訓練結果)
+      - ../checkpoints:/workspace/checkpoints
+      # 掛載日誌目錄
+      - ../logs:/workspace/logs
+      # 如果有本地模型,可掛載
+      # - ${LOCAL_MODEL_PATH:-./models}:/workspace/models
+    
+    # 共享記憶體 (訓練大模型時必須足夠大)
+    shm_size: ${SHM_SIZE:-16gb}
+    
+    # 資源限制 (可根據您的硬體調整)
+    # mem_limit: ${MEMORY_LIMIT:-64g}
+    # cpus: ${CPU_LIMIT:-16}
+    
+    # 工作目錄
+    working_dir: /workspace
+    
+    # 預設啟動指令 (交互式 shell,方便手動執行訓練)
+    command: /bin/bash
+    
+    # 保持容器運行
+    stdin_open: true
+    tty: true
+    
+    # 重啟策略
+    restart: unless-stopped
+    
+    # 網路模式
+    network_mode: bridge
+
+# 定義 volume 用於持久化資料
+volumes:
+  gpt-oss-cache:
+    driver: local
+
+# 網路配置
+networks:
+  default:
+    name: gpt-oss-network
+    driver: bridge
